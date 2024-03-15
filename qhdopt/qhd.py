@@ -1,6 +1,6 @@
 import time
 import warnings
-from typing import List, Tuple, Union, Optional, Callable
+from typing import Callable, List, Optional, Tuple, Union
 
 import cyipopt
 import jax.numpy as jnp
@@ -12,12 +12,15 @@ from sympy import lambdify
 from sympy.core.function import Function
 from sympy.core.symbol import Symbol
 
+from qhdopt.backend import dwave_backend
 from qhdopt.backend.backend import Backend
 from qhdopt.qhd_base import QHD_Base
-from qhdopt.backend import dwave_backend
 from qhdopt.response import Response
-from qhdopt.utils.function_preprocessing_utils import gen_new_func_with_affine_trans, \
-    generate_bounds, quad_to_gen
+from qhdopt.utils.function_preprocessing_utils import (
+    gen_new_func_with_affine_trans,
+    generate_bounds,
+    quad_to_gen,
+)
 
 
 class QHD:
@@ -29,10 +32,10 @@ class QHD:
     """
 
     def __init__(
-            self,
-            func: Function,
-            syms: List[Symbol],
-            bounds: Union[Tuple, List, None] = None,
+        self,
+        func: Function,
+        syms: List[Symbol],
+        bounds: Union[Tuple, List, None] = None,
     ):
         self.qubits = None
         self.qs = None
@@ -47,8 +50,10 @@ class QHD:
         self.lambda_numpy = lambdify(syms, func, jnp)
         self.dimension = len(syms)
         if len(syms) != len(func.free_symbols):
-            warnings.warn("The number of function free symbols does not match the number of syms.",
-                          RuntimeWarning)
+            warnings.warn(
+                "The number of function free symbols does not match the number of syms.",
+                RuntimeWarning,
+            )
 
     def generate_affined_func(self) -> Tuple[Function, List[Symbol]]:
         """
@@ -57,13 +62,15 @@ class QHD:
         inputted from the user
         """
         self.lb, self.scaling_factor = generate_bounds(self.bounds, self.dimension)
-        func, syms = gen_new_func_with_affine_trans(self.affine_transformation, self.func,
-                                                    self.syms)
+        func, syms = gen_new_func_with_affine_trans(
+            self.affine_transformation, self.func, self.syms
+        )
         return func, syms
 
     @classmethod
-    def SymPy(cls, func: Function, syms: List[Symbol],
-              bounds: Union[Tuple, List, None] = None) -> 'QHD':
+    def SymPy(
+        cls, func: Function, syms: List[Symbol], bounds: Union[Tuple, List, None] = None
+    ) -> "QHD":
         """
         Initialize QHD with a sympy function and its symbols
 
@@ -78,8 +85,12 @@ class QHD:
         return cls(func, syms, bounds)
 
     @classmethod
-    def QP(cls, Q: List[List[float]], b: List[float],
-           bounds: Union[Tuple, List, None] = None) -> 'QHD':
+    def QP(
+        cls,
+        Q: List[List[float]],
+        b: List[float],
+        bounds: Union[Tuple, List, None] = None,
+    ) -> "QHD":
         """
         Initialize QHD with a quadratic programming format
 
@@ -95,17 +106,17 @@ class QHD:
         return cls(f, xl, bounds)
 
     def dwave_setup(
-            self,
-            resolution: int,
-            shots: int = 100,
-            api_key: Optional[str] = None,
-            api_key_from_file: Optional[str] = None,
-            embedding_scheme: str = "unary",
-            anneal_schedule: Optional[List[List[int]]] = None,
-            penalty_coefficient: float = 0,
-            penalty_ratio: float = 0.75,
-            chain_strength_ratio: float = 1.05,
-            post_processing_method: str = "TNC",
+        self,
+        resolution: int,
+        shots: int = 100,
+        api_key: Optional[str] = None,
+        api_key_from_file: Optional[str] = None,
+        embedding_scheme: str = "unary",
+        anneal_schedule: Optional[List[List[int]]] = None,
+        penalty_coefficient: float = 0,
+        penalty_ratio: float = 0.75,
+        chain_strength_ratio: float = 1.05,
+        post_processing_method: str = "TNC",
     ):
         """
         Configures the settings for quantum optimization using D-Wave systems.
@@ -138,18 +149,62 @@ class QHD:
         self.shots = shots
         self.post_processing_method = post_processing_method
 
+    def cim_setup(
+        self,
+        resolution: int,
+        shots: int = 100,
+        api_key: Optional[str] = None,
+        api_key_from_file: Optional[str] = None,
+        embedding_scheme: str = "unary",
+        anneal_schedule: Optional[List[List[int]]] = None,
+        penalty_coefficient: float = 0,
+        penalty_ratio: float = 0.75,
+        chain_strength_ratio: float = 1.05,
+        post_processing_method: str = "TNC",
+    ):
+        """
+        Configures the settings for quantum optimization using D-Wave systems.
+
+        Args:
+            resolution: The number of bits representing each variable.
+            shots: The number of times the quantum device runs to find the solution.
+            api_key: Direct API key for connecting to D-Wave's cloud service.
+            api_key_from_file: Path to a file containing the D-Wave API key.
+            embedding_scheme: Method used for mapping logical variables to physical qubits.
+            anneal_schedule: Custom annealing schedule for quantum annealing.
+            penalty_coefficient: Coefficient used to enforce constraints in the quantum model.
+            penalty_ratio: Ratio used to calculate penalty coefficients.
+            post_processing_method: Classical optimization method used after quantum sampling.
+            chain_strength_ratio: Ratio of strength of chains in embedding.
+        """
+        func, syms = self.generate_affined_func()
+        self.qhd_base = QHD_Base(func, syms, self.info)
+        self.qhd_base.cim_setup(
+            resolution=resolution,
+            shots=shots,
+            api_key=api_key,
+            api_key_from_file=api_key_from_file,
+            embedding_scheme=embedding_scheme,
+            anneal_schedule=anneal_schedule,
+            penalty_coefficient=penalty_coefficient,
+            penalty_ratio=penalty_ratio,
+            chain_strength_ratio=chain_strength_ratio,
+        )
+        self.shots = shots
+        self.post_processing_method = post_processing_method
+
     def ionq_setup(
-            self,
-            resolution: int,
-            shots: int = 100,
-            api_key: Optional[str] = None,
-            api_key_from_file: Optional[str] = None,
-            embedding_scheme: str = "onehot",
-            penalty_coefficient: float = 0,
-            time_discretization: int = 10,
-            gamma: float = 5,
-            post_processing_method: str = "TNC",
-            on_simulator: bool = False,
+        self,
+        resolution: int,
+        shots: int = 100,
+        api_key: Optional[str] = None,
+        api_key_from_file: Optional[str] = None,
+        embedding_scheme: str = "onehot",
+        penalty_coefficient: float = 0,
+        time_discretization: int = 10,
+        gamma: float = 5,
+        post_processing_method: str = "TNC",
+        on_simulator: bool = False,
     ):
         """
         Configures the settings for running QHD using IonQ systems.
@@ -177,20 +232,20 @@ class QHD:
             penalty_coefficient=penalty_coefficient,
             time_discretization=time_discretization,
             gamma=gamma,
-            on_simulator=on_simulator
+            on_simulator=on_simulator,
         )
         self.shots = shots
         self.post_processing_method = post_processing_method
 
     def qutip_setup(
-            self,
-            resolution: int,
-            shots: int = 100,
-            embedding_scheme: str = "onehot",
-            penalty_coefficient: float = 0,
-            time_discretization: int = 10,
-            gamma: float = 5,
-            post_processing_method: str = "TNC",
+        self,
+        resolution: int,
+        shots: int = 100,
+        embedding_scheme: str = "onehot",
+        penalty_coefficient: float = 0,
+        time_discretization: int = 10,
+        gamma: float = 5,
+        post_processing_method: str = "TNC",
     ):
         """
         Configures the settings for quantum simulation of QHD using QuTiP.
@@ -218,9 +273,9 @@ class QHD:
         self.post_processing_method = post_processing_method
 
     def baseline_setup(
-            self,
-            shots: int = 100,
-            post_processing_method: str = "TNC",
+        self,
+        shots: int = 100,
+        post_processing_method: str = "TNC",
     ):
         """
         Sets up the baseline configuration for classical optimization comparison.
@@ -231,9 +286,7 @@ class QHD:
         """
         func, syms = self.generate_affined_func()
         self.qhd_base = QHD_Base(func, syms, self.info)
-        self.qhd_base.baseline_setup(
-            shots=shots
-        )
+        self.qhd_base.baseline_setup(shots=shots)
         self.shots = shots
         self.post_processing_method = post_processing_method
 
@@ -269,7 +322,9 @@ class QHD:
         """
         initial_guess = []
         for _ in range(shots):
-            initial_guess.append(self.lb + self.scaling_factor * np.random.rand(self.dimension))
+            initial_guess.append(
+                self.lb + self.scaling_factor * np.random.rand(self.dimension)
+            )
 
         return initial_guess
 
@@ -286,7 +341,9 @@ class QHD:
                 ub = self.lb[i] + self.scaling_factor[i]
                 assert ub >= guess[i] >= lb
 
-    def classically_optimize(self, verbose=0, initial_guess=None, num_shots=100, solver="IPOPT") -> Response:
+    def classically_optimize(
+        self, verbose=0, initial_guess=None, num_shots=100, solver="IPOPT"
+    ) -> Response:
         """
         Optimizes a given function classically over a set of samples and within specified bounds.
 
@@ -306,10 +363,9 @@ class QHD:
         ub = [self.lb[i] + self.scaling_factor[i] for i in range(len(self.lb))]
         bounds = Bounds(np.array(self.lb), np.array(ub))
         start_time = time.time()
-        samples, minimizer, minimum, optimize_time = self.classical_optimizer_helper(initial_guess,
-                                                                                     bounds,
-                                                                                     solver,
-                                                                                     self.fun_eval)
+        samples, minimizer, minimum, optimize_time = self.classical_optimizer_helper(
+            initial_guess, bounds, solver, self.fun_eval
+        )
         end_time = time.time()
 
         self.info["refined_minimum"] = minimum
@@ -320,8 +376,13 @@ class QHD:
         self.info["refine_status"] = True
         self.info["refining_time"] = end_time - start_time
 
-        classical_response = Response(self.info, refined_samples=samples, refined_minimum=minimum,
-                                      refined_minimizer=minimizer, func=self.fun_eval)
+        classical_response = Response(
+            self.info,
+            refined_samples=samples,
+            refined_minimum=minimum,
+            refined_minimizer=minimizer,
+            func=self.fun_eval,
+        )
 
         if verbose > 0:
             classical_response.print_time_info()
@@ -330,9 +391,9 @@ class QHD:
 
         return classical_response
 
-    def classical_optimizer_helper(self, samples: List[np.ndarray], bounds: Bounds, solver: str,
-                                   f: Callable) -> Tuple[
-        List[np.ndarray], np.ndarray, float, float]:
+    def classical_optimizer_helper(
+        self, samples: List[np.ndarray], bounds: Bounds, solver: str, f: Callable
+    ) -> Tuple[List[np.ndarray], np.ndarray, float, float]:
         """
         Helper function to optimize a given function classically over a set of samples and within specified bounds.
 
@@ -404,8 +465,9 @@ class QHD:
 
         ub = [self.lb[i] + self.scaling_factor[i] for i in range(len(self.lb))]
         bounds = Bounds(np.array(self.lb), np.array(ub))
-        opt_samples, minimizer, current_best, post_processing_time = self.classical_optimizer_helper(
-            samples, bounds, solver, self.fun_eval)
+        opt_samples, minimizer, current_best, post_processing_time = (
+            self.classical_optimizer_helper(samples, bounds, solver, self.fun_eval)
+        )
         self.post_processed_samples = opt_samples
         self.info["post_processing_time"] = post_processing_time
 
@@ -427,8 +489,9 @@ class QHD:
             Response object containing samples, minimum, minimizer, and other info
         """
         response = self.qhd_base.optimize(verbose)
-        self.coarse_minimizer, self.coarse_minimum, self.decoded_samples = self.affine_mapping(
-            response.minimizer, response.minimum, response.samples)
+        self.coarse_minimizer, self.coarse_minimum, self.decoded_samples = (
+            self.affine_mapping(response.minimizer, response.minimum, response.samples)
+        )
         self.info["refine_status"] = refine
         if refine:
             start_time_finetuning = time.time()
@@ -436,13 +499,24 @@ class QHD:
             end_time_finetuning = time.time()
             self.info["refined_minimum"] = refined_minimum
             self.info["refining_time"] = end_time_finetuning - start_time_finetuning
-            qhd_response = Response(self.info, self.decoded_samples, self.coarse_minimum,
-                                    self.coarse_minimizer,
-                                    self.post_processed_samples, refined_minimum, refined_minimizer,
-                                    self.fun_eval)
+            qhd_response = Response(
+                self.info,
+                self.decoded_samples,
+                self.coarse_minimum,
+                self.coarse_minimizer,
+                self.post_processed_samples,
+                refined_minimum,
+                refined_minimizer,
+                self.fun_eval,
+            )
         else:
-            qhd_response = Response(self.info, self.decoded_samples, self.coarse_minimum,
-                                    self.coarse_minimizer, self.fun_eval)
+            qhd_response = Response(
+                self.info,
+                self.decoded_samples,
+                self.coarse_minimum,
+                self.coarse_minimizer,
+                self.fun_eval,
+            )
 
         if verbose > 0:
             qhd_response.print_time_info()
@@ -451,7 +525,9 @@ class QHD:
 
         return qhd_response
 
-    def affine_mapping(self, minimizer: np.ndarray, minimum: float, samples: List[np.ndarray]) -> Tuple[np.ndarray, float, List[np.ndarray]]:
+    def affine_mapping(
+        self, minimizer: np.ndarray, minimum: float, samples: List[np.ndarray]
+    ) -> Tuple[np.ndarray, float, List[np.ndarray]]:
         """
         Maps the minimizer and samples from the normalized space to the original space.
 
@@ -491,31 +567,36 @@ class QHD:
             return values[self.syms_index[var]]
         # Otherwise, v is a list of Symbols.
         return [values[self.syms_index[v]] for v in var]
-    
+
     def solver_param_diagnose(self):
         if not isinstance(self.qhd_base.backend, dwave_backend.DWaveBackend):
-            raise Exception(
-                "This function is only used for D-Wave backends."
-            )
-        
-        if self.response.samples is None:
-            raise Exception(
-                "This function must run after executing QHD on D-Wave."
-            )
+            raise Exception("This function is only used for D-Wave backends.")
 
-        h, J, _ = self.qhd_base.backend.exec(verbose=0, info=self.qhd_base.info, compile_only=True)
+        if self.response.samples is None:
+            raise Exception("This function must run after executing QHD on D-Wave.")
+
+        h, J, _ = self.qhd_base.backend.exec(
+            verbose=0, info=self.qhd_base.info, compile_only=True
+        )
         hmax = np.max(np.abs(list(h)))
         Jmax = np.max(np.abs(list(J.values())))
-        chain_break_fraction = self.qhd_base.backend.dwave_response.record['chain_break_fraction']
+        chain_break_fraction = self.qhd_base.backend.dwave_response.record[
+            "chain_break_fraction"
+        ]
 
         shots_in_subspace = len(self.response.coarse_samples)
 
         print("***Solver Parameter Diagnosis***")
         print("---Solver Parameters---")
         print(f"hmax = {hmax}, Jmax = {Jmax}")
-        print(f"penalty ratio = {self.qhd_base.backend.penalty_ratio}, penalty coefficient = {self.qhd_base.backend.penalty_coefficient}")
-        print(f"chain strength ratio = {self.qhd_base.backend.chain_strength_ratio}, chain strength = {self.qhd_base.backend.chain_strength}")
+        print(
+            f"penalty ratio = {self.qhd_base.backend.penalty_ratio}, penalty coefficient = {self.qhd_base.backend.penalty_coefficient}"
+        )
+        print(
+            f"chain strength ratio = {self.qhd_base.backend.chain_strength_ratio}, chain strength = {self.qhd_base.backend.chain_strength}"
+        )
         print("---Solution Stats---")
-        print(f"total shots = {self.qhd_base.backend.shots}, shots in subspace = {shots_in_subspace}")
+        print(
+            f"total shots = {self.qhd_base.backend.shots}, shots in subspace = {shots_in_subspace}"
+        )
         print(f"median chain break fraction = {np.median(chain_break_fraction)}")
-

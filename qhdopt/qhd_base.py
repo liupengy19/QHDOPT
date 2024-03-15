@@ -1,10 +1,16 @@
 import time
-from typing import List, Dict, Union, Optional
+from typing import Dict, List, Optional, Union
 
-from sympy import lambdify, Symbol, Function
 import jax.numpy as jnp
+from sympy import Function, Symbol, lambdify
 
-from qhdopt.backend import dwave_backend, ionq_backend, qutip_backend, baseline_backend
+from qhdopt.backend import (
+    baseline_backend,
+    cim_backend,
+    dwave_backend,
+    ionq_backend,
+    qutip_backend,
+)
 from qhdopt.response import Response
 from qhdopt.utils.function_preprocessing_utils import decompose_function
 
@@ -16,11 +22,12 @@ class QHD_Base:
 
     A user should initialize QHD through the use of the functions: QHD_Base.QP and QHD_Base_Sympy
     """
+
     def __init__(
         self,
         func: Function,
         syms: List[Symbol],
-        info: Dict[str, Union[int, float, str]]
+        info: Dict[str, Union[int, float, str]],
     ):
         """
         Initializes the QHD_Base class.
@@ -33,7 +40,9 @@ class QHD_Base:
         self.func = func
         self.syms = syms
         self.dimension = len(syms)
-        self.univariate_dict, self.bivariate_dict = decompose_function(self.func, self.syms)
+        self.univariate_dict, self.bivariate_dict = decompose_function(
+            self.func, self.syms
+        )
         lambda_numpy = lambdify(syms, func, jnp)
         self.f_eval = lambda x: lambda_numpy(*x)
         self.info = info
@@ -76,7 +85,44 @@ class QHD_Base:
             anneal_schedule=anneal_schedule,
             penalty_coefficient=penalty_coefficient,
             penalty_ratio=penalty_ratio,
-            chain_strength_ratio=chain_strength_ratio
+            chain_strength_ratio=chain_strength_ratio,
+        )
+
+    def cim_setup(
+        self,
+        resolution: int,
+        shots: int = 100,
+        api_key: Optional[str] = None,
+        api_key_from_file: Optional[str] = None,
+        embedding_scheme: str = "unary",
+        anneal_schedule: Optional[List[List[int]]] = None,
+        penalty_coefficient: float = 0,
+        penalty_ratio: float = 0.75,
+        chain_strength_ratio: float = 1.05,
+    ) -> None:
+        """
+        Sets up the cim backend for quantum optimization.
+
+        Args:
+            resolution: Resolution for discretizing variable space.
+            shots: Number of sampling shots for the cim device.
+            embedding_scheme: Embedding scheme for problem mapping.
+            anneal_schedule: Custom annealing schedule.
+            penalty_coefficient: Coefficient for penalty terms.
+            penalty_ratio: Ratio of penalty terms in the objective function.
+            chain_strength_ratio: Ratio of strength of chains in embedding.
+        """
+        self.backend = cim_backend.CIMBackend(
+            resolution=resolution,
+            dimension=self.dimension,
+            univariate_dict=self.univariate_dict,
+            bivariate_dict=self.bivariate_dict,
+            shots=shots,
+            embedding_scheme=embedding_scheme,
+            anneal_schedule=anneal_schedule,
+            penalty_coefficient=penalty_coefficient,
+            penalty_ratio=penalty_ratio,
+            chain_strength_ratio=chain_strength_ratio,
         )
 
     def ionq_setup(
@@ -127,7 +173,7 @@ class QHD_Base:
         embedding_scheme: str = "onehot",
         penalty_coefficient: float = 0,
         time_discretization: int = 10,
-        gamma: float = 5
+        gamma: float = 5,
     ) -> None:
         """
         Sets up the QuTiP backend for quantum simulation.
@@ -173,10 +219,7 @@ class QHD_Base:
         self.backend.compile(self.info)
         return self.backend
 
-    def optimize(
-            self,
-            verbose: int = 0
-    ) -> Optional[Response]:
+    def optimize(self, verbose: int = 0) -> Optional[Response]:
         """
         Executes the optimization process.
 
@@ -188,13 +231,15 @@ class QHD_Base:
         """
         raw_samples = self.backend.exec(verbose=verbose, info=self.info)
 
-
         start_time_decoding = time.time()
-        coarse_minimizer, coarse_minimum, self.decoded_samples = self.backend.decoder(raw_samples,
-                                                                                      self.f_eval)
+        coarse_minimizer, coarse_minimum, self.decoded_samples = self.backend.decoder(
+            raw_samples, self.f_eval
+        )
 
         end_time_decoding = time.time()
         self.info["decoding_time"] = end_time_decoding - start_time_decoding
-        qhd_response = Response(self.info, self.decoded_samples, coarse_minimum, coarse_minimizer)
+        qhd_response = Response(
+            self.info, self.decoded_samples, coarse_minimum, coarse_minimizer
+        )
 
         return qhd_response
