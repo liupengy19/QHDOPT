@@ -163,13 +163,13 @@ class QHD:
         post_processing_method: str = "TNC",
     ):
         """
-        Configures the settings for quantum optimization using D-Wave systems.
+        Configures the settings for quantum optimization using CIM optimizer.
 
         Args:
             resolution: The number of bits representing each variable.
             shots: The number of times the quantum device runs to find the solution.
-            api_key: Direct API key for connecting to D-Wave's cloud service.
-            api_key_from_file: Path to a file containing the D-Wave API key.
+            api_key: Not required for CIM optimizer.
+            api_key_from_file: Not required for CIM optimizer.
             embedding_scheme: Method used for mapping logical variables to physical qubits.
             anneal_schedule: Custom annealing schedule for quantum annealing.
             penalty_coefficient: Coefficient used to enforce constraints in the quantum model.

@@ -12,8 +12,8 @@ from qhdopt.utils.decoding_utils import spin_to_bitstring
 
 class CIMBackend(Backend):
     """
-    Backend implementation for Dwave. Find more information about Dwave's
-    backend here: https://docs.dwavesys.com/docs/latest/c_gs_2.html
+    Backend implementation for CIM-Optimizer. Find more information about CIM-Optimizer
+    here: https://cim-optimizer.readthedocs.io/en/latest/
     """
 
     def __init__(
@@ -43,7 +43,7 @@ class CIMBackend(Backend):
         self.penalty_coefficient = penalty_coefficient
         self.penalty_ratio = penalty_ratio
         self.chain_strength_ratio = chain_strength_ratio
-        self.api_key = ""
+        self.api_key = ""  # CIM backend does not require an API key to run
 
     def calc_penalty_coefficient_and_chain_strength(self) -> Tuple[float, float]:
         """
@@ -101,10 +101,9 @@ class CIMBackend(Backend):
 
     def exec(self, verbose: int, info: dict, compile_only=False) -> List[List[int]]:
         """
-        Execute the Dwave quantum backend using the problem description specified in
+        Execute the CIM optimizer using the problem description specified in
         self.univariate_dict and self.bivariate_dict. It uses self.H_p to generate
-        the problem hamiltonian and then uses Simuq's DwaveProvider to run the evolution
-        on Dwave.
+        the problem hamiltonian and then uses CIM's classical solver.
 
         Args:
             verbose: Verbosity level.
@@ -112,7 +111,7 @@ class CIMBackend(Backend):
             compile_only: If True, the function only compiles the problem and does not run it.
 
         Returns:
-            raw_samples: A list of raw samples from the Dwave backend.
+            raw_samples: A list of raw samples from the CIM optimizer.
         """
         self.compile(info)
 
@@ -124,24 +123,12 @@ class CIMBackend(Backend):
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()))
 
         start_run_time = time.time()
-        # self.dwave_response = self.dwp.run(shots=self.shots)
         raw_samples = []
         for _ in range(self.shots):
             solution = Ising(self.J, self.h).solve().result["lowest_energy_spin_config"]
             raw_samples.append(solution)
 
-        # info["backend_time"] = time.time() - start_run_time
-        # info["average_qpu_time"] = self.dwp.avg_qpu_time
-        # info["time_on_machine"] = self.dwp.time_on_machine
-        # info["overhead_time"] = info["backend_time"] - info["time_on_machine"]
-
-        # if verbose > 1:
-        #     print("Received Task from D-Wave:")
-        #     print(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()))
-
-        # if verbose > 0:
-        #     print(f"Backend QPU Time: {info['time_on_machine']}")
-        #     print(f"Overhead Time: {info['overhead_time']}\n")
+        info["backend_time"] = time.time() - start_run_time
 
         raw_samples = [spin_to_bitstring(raw_sample) for raw_sample in raw_samples]
 
